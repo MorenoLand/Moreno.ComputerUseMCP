@@ -3,13 +3,10 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
-	"image/jpeg"
-	"image/png"
 	"strconv"
 	"strings"
 	"syscall"
@@ -391,25 +388,7 @@ func capture(ctx context.Context, rect captureRect, options computer.ScreenshotO
 			img.Pix[target+3] = 0xff
 		}
 	}
-	if options.MaxWidth > 0 && width > options.MaxWidth {
-		img = resizeNearest(img, options.MaxWidth)
-	}
-	var encoded bytes.Buffer
-	mimeType := "image/jpeg"
-	switch options.Format {
-	case "jpeg":
-		if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
-			return nil, "", 0, 0, err
-		}
-	case "png":
-		mimeType = "image/png"
-		if err := png.Encode(&encoded, img); err != nil {
-			return nil, "", 0, 0, err
-		}
-	default:
-		return nil, "", 0, 0, fmt.Errorf("unsupported screenshot format %q", options.Format)
-	}
-	return encoded.Bytes(), mimeType, img.Bounds().Dx(), img.Bounds().Dy(), nil
+	return computer.EncodeImage(img, options)
 }
 
 func drawCursor(hdc uintptr, rect captureRect) {
@@ -420,24 +399,6 @@ func drawCursor(hdc uintptr, rect captureRect) {
 	x := int(info.Position.X) - rect.Left
 	y := int(info.Position.Y) - rect.Top
 	procDrawIconEx.Call(hdc, uintptr(int32(x)), uintptr(int32(y)), info.Cursor, 0, 0, 0, 0, diNormal)
-}
-
-func resizeNearest(source *image.RGBA, width int) *image.RGBA {
-	height := source.Bounds().Dy() * width / source.Bounds().Dx()
-	if height < 1 {
-		height = 1
-	}
-	result := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		sourceY := y * source.Bounds().Dy() / height
-		for x := 0; x < width; x++ {
-			sourceX := x * source.Bounds().Dx() / width
-			sourceOffset := sourceY*source.Stride + sourceX*4
-			targetOffset := y*result.Stride + x*4
-			copy(result.Pix[targetOffset:targetOffset+4], source.Pix[sourceOffset:sourceOffset+4])
-		}
-	}
-	return result
 }
 
 func systemMetric(index int) int {
