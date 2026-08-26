@@ -259,11 +259,23 @@ func (b *windowsBackend) Type(ctx context.Context, options computer.TypeOptions)
 		return err
 	}
 	units := utf16.Encode([]rune(options.Text))
-	inputs := make([]nativeInput, 0, len(units)*2)
-	for _, unit := range units {
-		inputs = append(inputs, unicodeKeyboardInput(unit, keyEventUnicode), unicodeKeyboardInput(unit, keyEventUnicode|keyEventKeyUp))
+	for start := 0; start < len(units); start += 64 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		end := start + 64
+		if end > len(units) {
+			end = len(units)
+		}
+		inputs := make([]nativeInput, 0, (end-start)*2)
+		for _, unit := range units[start:end] {
+			inputs = append(inputs, unicodeKeyboardInput(unit, keyEventUnicode), unicodeKeyboardInput(unit, keyEventUnicode|keyEventKeyUp))
+		}
+		if err := sendInputs(inputs); err != nil {
+			return err
+		}
 	}
-	return sendInputs(inputs)
+	return ctx.Err()
 }
 
 func (b *windowsBackend) Keypress(ctx context.Context, options computer.KeypressOptions) error {
