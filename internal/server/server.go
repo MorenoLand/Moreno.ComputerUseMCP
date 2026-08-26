@@ -38,13 +38,42 @@ type keypressInput struct {
 	Keys []string `json:"keys" jsonschema:"keys pressed together or in sequence"`
 }
 
-func New(backend computer.Backend) *mcp.Server {
-	service := computer.NewService(backend)
-	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "computer-use", Version: "0.1.0"}, nil)
+type Activity interface {
+	Begin()
+	End()
+	SetClient(string)
+}
+
+type idleActivity struct{}
+
+func (idleActivity) Begin()           {}
+func (idleActivity) End()             {}
+func (idleActivity) SetClient(string) {}
+
+func New(service *computer.Service, activity Activity) *mcp.Server {
+	if activity == nil {
+		activity = idleActivity{}
+	}
+	start := func() func() {
+		activity.Begin()
+		return activity.End
+	}
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "computer-use", Version: "0.1.0"}, &mcp.ServerOptions{
+		InitializedHandler: func(_ context.Context, request *mcp.InitializedRequest) {
+			if request != nil && request.Session != nil {
+				params := request.Session.InitializeParams()
+				if params != nil && params.ClientInfo != nil {
+					activity.SetClient(params.ClientInfo.Name)
+				}
+			}
+		},
+	})
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "computer_screenshot",
 		Description: "Capture the desktop or a visible application and return it as an image.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input screenshotInput) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		screenshot, err := service.Screenshot(ctx, computer.ScreenshotOptions{
 			Target:        computer.Target(input.Target),
 			WindowID:      input.WindowID,
@@ -78,6 +107,8 @@ func New(backend computer.Backend) *mcp.Server {
 		Name:        "computer_list_windows",
 		Description: "List visible desktop windows and their screen coordinates.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		windows, err := service.ListWindows(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -92,6 +123,8 @@ func New(backend computer.Backend) *mcp.Server {
 		Name:        "computer_move",
 		Description: "Move the pointer to an absolute screen coordinate.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input moveInput) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		if err := service.Move(ctx, computer.Point{X: input.X, Y: input.Y}); err != nil {
 			return nil, nil, err
 		}
@@ -101,6 +134,8 @@ func New(backend computer.Backend) *mcp.Server {
 		Name:        "computer_click",
 		Description: "Move to an absolute screen coordinate and click a mouse button.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input clickInput) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		if err := service.Click(ctx, computer.ClickOptions{
 			Point:     computer.Point{X: input.X, Y: input.Y},
 			Button:    input.Button,
@@ -115,6 +150,8 @@ func New(backend computer.Backend) *mcp.Server {
 		Name:        "computer_type",
 		Description: "Type text into the currently focused application.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input typeInput) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		if err := service.Type(ctx, computer.TypeOptions{Text: input.Text}); err != nil {
 			return nil, nil, err
 		}
@@ -124,6 +161,8 @@ func New(backend computer.Backend) *mcp.Server {
 		Name:        "computer_keypress",
 		Description: "Press a key or key combination, such as CTRL and L.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input keypressInput) (*mcp.CallToolResult, any, error) {
+		end := start()
+		defer end()
 		if err := service.Keypress(ctx, computer.KeypressOptions{Keys: input.Keys}); err != nil {
 			return nil, nil, err
 		}

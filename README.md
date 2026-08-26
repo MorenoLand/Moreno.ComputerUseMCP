@@ -10,13 +10,15 @@ A small, local MCP server that lets vision-capable models inspect and control th
 - Type text
 - Send key combinations
 - Return screenshots as standard MCP image content
+- Show a small click-through watermark identifying the controlling client
+- Abort active computer input with Escape
 - Run as one stdio executable with no background service
 
 ## Safety model
 
 The default transport is local stdio. The client launches the executable and communicates over standard input and output. The server does not expose a network listener, shell, filesystem browser, or full-screen overlay.
 
-Desktop input is powerful. Keep the executable and client configuration private, use a separate test desktop for automation, and stop the client if an action is unexpected.
+Desktop input is powerful. Keep the executable and client configuration private, use a separate test desktop for automation, and press Escape if an action is unexpected. While connected, a small click-through watermark identifies the controlling MCP client and shows the Escape stop key. It is not a full-screen overlay.
 
 ## Client configuration
 
@@ -36,11 +38,11 @@ On Windows, use the absolute path to the ".exe" file.
 
 ## Platform notes
 
-The current native backends are Windows and Linux X11. Native Wayland and macOS builds are kept behind explicit unsupported errors until their permission and capture APIs are implemented. X11 input requires the XTEST extension; X11 text entry currently supports ASCII and the active keyboard layout.
+The current native backends are Windows and Linux X11. Native Wayland and macOS builds are kept behind explicit unsupported errors until their permission and capture APIs are implemented. Windows and X11 show the control watermark and watch for Escape. X11 input requires the XTEST extension; X11 text entry currently supports ASCII and the active keyboard layout.
 
 Each operating system has its own screen-capture and input permissions. Wayland may ask for screen and input access through the desktop portal. macOS requires the normal Screen Recording and Accessibility permissions.
 
-The server is designed to capture on demand. It does not continuously render a preview or place a full-screen transparent surface over the desktop.
+The server is designed to capture on demand. It does not continuously render a preview or place a full-screen transparent surface over the desktop; the status watermark is a small static window updated only when state changes, and the four-edge control line stays visible for two seconds after each action.
 
 ## Development
 
