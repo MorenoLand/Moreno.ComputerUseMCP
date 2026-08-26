@@ -9,6 +9,7 @@ import (
 )
 
 var ErrUnsupported = errors.New("computer use is unsupported")
+var ErrAborted = errors.New("computer use aborted by Escape")
 
 type Target string
 
@@ -81,8 +82,15 @@ type Backend interface {
 }
 
 type Service struct {
-	backend Backend
-	mu      sync.Mutex
+	backend  Backend
+	mu       sync.Mutex
+	activeMu sync.Mutex
+	activeOp *operation
+}
+
+type operation struct {
+	cancel  context.CancelFunc
+	aborted bool
 }
 
 func NewService(backend Backend) *Service {
@@ -96,39 +104,41 @@ func (s *Service) Screenshot(ctx context.Context, options ScreenshotOptions) (Sc
 	if err := normalizeScreenshotOptions(&options); err != nil {
 		return Screenshot{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.backend.Screenshot(ctx, options)
+	var result Screenshot
+	err := s.run(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = s.backend.Screenshot(ctx, options)
+		return err
+	})
+	return result, err
 }
 
 func (s *Service) ListWindows(ctx context.Context) ([]Window, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.backend.ListWindows(ctx)
+	var result []Window
+	err := s.run(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = s.backend.ListWindows(ctx)
+		return err
+	})
+	return result, err
 }
 
 func (s *Service) Move(ctx context.Context, point Point) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.backend.Move(ctx, point)
+	return s.run(ctx, func(ctx context.Context) error { return s.backend.Move(ctx, point) })
 }
 
 func (s *Service) Click(ctx context.Context, options ClickOptions) error {
 	if err := normalizeClickOptions(&options); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.backend.Click(ctx, options)
+	return s.run(ctx, func(ctx context.Context) error { return s.backend.Click(ctx, options) })
 }
 
 func (s *Service) Type(ctx context.Context, options TypeOptions) error {
 	if len(options.Text) > 1<<20 {
 		return errors.New("typed text exceeds 1 MiB")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.backend.Type(ctx, options)
+	return s.run(ctx, func(ctx context.Context) error { return s.backend.Type(ctx, options) })
 }
 
 func (s *Service) Keypress(ctx context.Context, options KeypressOptions) error {
@@ -138,12 +148,42 @@ func (s *Service) Keypress(ctx context.Context, options KeypressOptions) error {
 	if len(options.Keys) > 16 {
 		return errors.New("at most 16 keys may be sent in one keypress")
 	}
+	return s.run(ctx, func(ctx context.Context) error { return s.backend.Keypress(ctx, options) })
+}
+
+func (s *Service) Abort() {
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+	if s.activeOp != nil {
+		s.activeOp.aborted = true
+		s.activeOp.cancel()
+	}
+}
+
+func (s *Service) run(ctx context.Context, fn func(context.Context) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.backend.Keypress(ctx, options)
+	operationCtx, cancel := context.WithCancel(ctx)
+	op := &operation{cancel: cancel}
+	s.activeMu.Lock()
+	s.activeOp = op
+	s.activeMu.Unlock()
+	err := fn(operationCtx)
+	s.activeMu.Lock()
+	if s.activeOp == op {
+		s.activeOp = nil
+	}
+	aborted := op.aborted
+	s.activeMu.Unlock()
+	cancel()
+	if aborted {
+		return ErrAborted
+	}
+	return err
 }
 
 func (s *Service) Close() error {
+	s.Abort()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.backend.Close()

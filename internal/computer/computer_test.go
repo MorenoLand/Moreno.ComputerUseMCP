@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 type backendMock struct {
@@ -13,6 +14,17 @@ type backendMock struct {
 	typed      TypeOptions
 	keys       KeypressOptions
 	point      Point
+}
+
+type blockingBackend struct {
+	backendMock
+	started chan struct{}
+}
+
+func (b *blockingBackend) Move(ctx context.Context, point Point) error {
+	close(b.started)
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (b *backendMock) Screenshot(_ context.Context, options ScreenshotOptions) (Screenshot, error) {
@@ -115,5 +127,26 @@ func TestUnsupportedBackend(t *testing.T) {
 	_, err := backend.Screenshot(context.Background(), ScreenshotOptions{})
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("error = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestAbort(t *testing.T) {
+	backend := &blockingBackend{started: make(chan struct{})}
+	service := NewService(backend)
+	result := make(chan error, 1)
+	go func() { result <- service.Move(context.Background(), Point{X: 1, Y: 2}) }()
+	select {
+	case <-backend.started:
+	case <-time.After(time.Second):
+		t.Fatal("Move did not start")
+	}
+	service.Abort()
+	select {
+	case err := <-result:
+		if !errors.Is(err, ErrAborted) {
+			t.Fatalf("error = %v, want ErrAborted", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Move did not abort")
 	}
 }
