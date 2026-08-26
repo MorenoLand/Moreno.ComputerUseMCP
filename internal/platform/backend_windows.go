@@ -261,7 +261,7 @@ func (b *windowsBackend) Type(ctx context.Context, options computer.TypeOptions)
 	units := utf16.Encode([]rune(options.Text))
 	inputs := make([]nativeInput, 0, len(units)*2)
 	for _, unit := range units {
-		inputs = append(inputs, keyboardInput(unit, keyEventUnicode), keyboardInput(unit, keyEventUnicode|keyEventKeyUp))
+		inputs = append(inputs, unicodeKeyboardInput(unit, keyEventUnicode), unicodeKeyboardInput(unit, keyEventUnicode|keyEventKeyUp))
 	}
 	return sendInputs(inputs)
 }
@@ -492,6 +492,12 @@ func mouseInput(mouseData uint32, flags uint32) nativeInput {
 func keyboardInput(vk uint16, flags uint32) nativeInput {
 	result := nativeInput{Type: inputKeyboard}
 	*(*nativeKeyboardInput)(unsafe.Pointer(&result.Data[0])) = nativeKeyboardInput{VirtualKey: vk, Flags: flags}
+	return result
+}
+
+func unicodeKeyboardInput(unit uint16, flags uint32) nativeInput {
+	result := nativeInput{Type: inputKeyboard}
+	*(*nativeKeyboardInput)(unsafe.Pointer(&result.Data[0])) = nativeKeyboardInput{ScanCode: unit, Flags: flags}
 	return result
 }
 
