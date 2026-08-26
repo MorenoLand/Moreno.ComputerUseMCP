@@ -36,7 +36,9 @@ On Windows, use the absolute path to the ".exe" file.
 
 ## Platform notes
 
-Each operating system has its own screen-capture and input permissions. X11 and Wayland are different backends; Wayland may ask for screen and input access through the desktop portal. macOS requires the normal Screen Recording and Accessibility permissions.
+The current native backends are Windows and Linux X11. Native Wayland and macOS builds are kept behind explicit unsupported errors until their permission and capture APIs are implemented. X11 input requires the XTEST extension; X11 text entry currently supports ASCII and the active keyboard layout.
+
+Each operating system has its own screen-capture and input permissions. Wayland may ask for screen and input access through the desktop portal. macOS requires the normal Screen Recording and Accessibility permissions.
 
 The server is designed to capture on demand. It does not continuously render a preview or place a full-screen transparent surface over the desktop.
 

@@ -3,6 +3,7 @@ module github.com/MorenoLand/Moreno.ComputerUseMCP
 go 1.26.0
 
 require (
+	github.com/jezek/xgb v1.3.1
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	golang.org/x/sys v0.41.0
 )
