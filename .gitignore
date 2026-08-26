@@ -1,0 +1,18 @@
+# Binaries
+*.exe
+*.out
+*.test
+bin/
+dist/
+
+# Go tooling
+vendor/
+cover.out
+coverage.out
+
+# Editors and operating-system files
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
