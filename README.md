@@ -18,7 +18,7 @@ A small, local MCP server that lets vision-capable models inspect and control th
 
 The default transport is local stdio. The client launches the executable and communicates over standard input and output. The server does not expose a network listener, shell, filesystem browser, or full-screen overlay.
 
-Desktop input is powerful. Keep the executable and client configuration private, use a separate test desktop for automation, and press Escape if an action is unexpected. While connected, a small click-through watermark identifies the controlling MCP client and shows the Escape stop key. It is not a full-screen overlay.
+Desktop input is powerful. Keep the executable and client configuration private, use a separate test desktop for automation, and press Escape if an action is unexpected. During input actions, a small click-through watermark identifies the controlling MCP client and shows the Escape stop key. It is not a full-screen overlay.
 
 ## Client configuration
 
@@ -38,11 +38,11 @@ On Windows, use the absolute path to the ".exe" file.
 
 ## Platform notes
 
-The current native backends are Windows and Linux X11. Native Wayland and macOS builds are kept behind explicit unsupported errors until their permission and capture APIs are implemented. Windows and X11 show the control watermark and watch for Escape. X11 input requires the XTEST extension; X11 text entry currently supports ASCII and the active keyboard layout.
+The current native backends are Windows and Linux X11. On Windows, active and selected window screenshots render the target window directly, so focus and overlapping windows do not change the returned image. Minimized windows are restored without activation at an off-screen position, captured, and minimized again with their original placement, so the user's focus and screen are left alone; the reported origin is where the window would appear if restored. Native Wayland and macOS builds are kept behind explicit unsupported errors until their permission and capture APIs are implemented. Windows and X11 show the control watermark and watch for Escape. X11 input requires the XTEST extension; X11 text entry currently supports ASCII and the active keyboard layout.
 
 Each operating system has its own screen-capture and input permissions. Wayland may ask for screen and input access through the desktop portal. macOS requires the normal Screen Recording and Accessibility permissions.
 
-The server is designed to capture on demand. It does not continuously render a preview or place a full-screen transparent surface over the desktop; the status watermark is a small static window updated only when state changes, and the four-edge control line stays visible for two seconds after each action.
+The server is designed to capture on demand. It does not continuously render a preview or place a full-screen transparent surface over the desktop; screenshots and window listings are stealthy and do not show the indicator, while input actions show a small static watermark and four-edge control line for two seconds after each action.
 
 ## Development
 

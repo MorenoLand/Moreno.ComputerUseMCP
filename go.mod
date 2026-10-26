@@ -3,6 +3,8 @@ module github.com/MorenoLand/Moreno.ComputerUseMCP
 go 1.26.0
 
 require (
+	github.com/deploymenttheory/go-bindings-win32 v0.2.1
+	github.com/deploymenttheory/go-bindings-winrt v0.6.0
 	github.com/jezek/xgb v1.3.1
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	golang.org/x/sys v0.41.0

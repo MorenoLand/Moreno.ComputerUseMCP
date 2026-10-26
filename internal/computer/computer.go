@@ -22,6 +22,7 @@ const (
 type ScreenshotOptions struct {
 	Target        Target
 	WindowID      string
+	WindowTitle   string
 	Format        string
 	Quality       int
 	MaxWidth      int
@@ -106,6 +107,17 @@ func (s *Service) Screenshot(ctx context.Context, options ScreenshotOptions) (Sc
 	}
 	var result Screenshot
 	err := s.run(ctx, func(ctx context.Context) error {
+		if options.Target == TargetWindow && strings.TrimSpace(options.WindowID) == "" {
+			windows, err := s.backend.ListWindows(ctx)
+			if err != nil {
+				return err
+			}
+			id, err := MatchWindowTitle(windows, options.WindowTitle)
+			if err != nil {
+				return err
+			}
+			options.WindowID = id
+		}
 		var err error
 		result, err = s.backend.Screenshot(ctx, options)
 		return err
@@ -196,8 +208,8 @@ func normalizeScreenshotOptions(options *ScreenshotOptions) error {
 	switch options.Target {
 	case TargetScreen, TargetActiveWindow:
 	case TargetWindow:
-		if strings.TrimSpace(options.WindowID) == "" {
-			return errors.New("window_id is required for window screenshots")
+		if strings.TrimSpace(options.WindowID) == "" && strings.TrimSpace(options.WindowTitle) == "" {
+			return errors.New("window_id or window_title is required for window screenshots")
 		}
 	default:
 		return fmt.Errorf("invalid screenshot target %q", options.Target)
@@ -271,4 +283,24 @@ func (b UnsupportedBackend) Keypress(context.Context, KeypressOptions) error {
 
 func (b UnsupportedBackend) Close() error {
 	return nil
+}
+
+// MatchWindowTitle returns the ID of the window whose title equals title, or
+// failing that contains it, ignoring case. Earlier windows win ties.
+func MatchWindowTitle(windows []Window, title string) (string, error) {
+	needle := strings.ToLower(strings.TrimSpace(title))
+	partial := ""
+	for _, window := range windows {
+		name := strings.ToLower(window.Title)
+		if name == needle {
+			return window.ID, nil
+		}
+		if partial == "" && strings.Contains(name, needle) {
+			partial = window.ID
+		}
+	}
+	if partial == "" {
+		return "", fmt.Errorf("no window title matches %q", title)
+	}
+	return partial, nil
 }

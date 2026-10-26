@@ -11,6 +11,7 @@ import (
 type screenshotInput struct {
 	Target        string `json:"target,omitempty" jsonschema:"target: screen, active_window, or window"`
 	WindowID      string `json:"window_id,omitempty" jsonschema:"window identifier returned by computer_list_windows"`
+	WindowTitle   string `json:"window_title,omitempty" jsonschema:"title or part of a title of the window to capture, used when window_id is not given"`
 	Format        string `json:"format,omitempty" jsonschema:"image format: jpeg or png"`
 	Quality       int    `json:"quality,omitempty" jsonschema:"jpeg quality from 1 to 100"`
 	MaxWidth      int    `json:"max_width,omitempty" jsonschema:"optional maximum output width in pixels"`
@@ -70,13 +71,12 @@ func New(service *computer.Service, activity Activity) *mcp.Server {
 	})
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name:        "computer_screenshot",
-		Description: "Capture the desktop or a visible application and return it as an image.",
+		Description: "Capture the desktop, the active window, or any listed window (including minimized or covered ones, on Windows) and return it as an image.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input screenshotInput) (*mcp.CallToolResult, any, error) {
-		end := start()
-		defer end()
 		screenshot, err := service.Screenshot(ctx, computer.ScreenshotOptions{
 			Target:        computer.Target(input.Target),
 			WindowID:      input.WindowID,
+			WindowTitle:   input.WindowTitle,
 			Format:        input.Format,
 			Quality:       input.Quality,
 			MaxWidth:      input.MaxWidth,
@@ -107,8 +107,6 @@ func New(service *computer.Service, activity Activity) *mcp.Server {
 		Name:        "computer_list_windows",
 		Description: "List visible desktop windows and their screen coordinates.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		end := start()
-		defer end()
 		windows, err := service.ListWindows(ctx)
 		if err != nil {
 			return nil, nil, err

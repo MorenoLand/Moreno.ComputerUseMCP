@@ -150,3 +150,17 @@ func TestAbort(t *testing.T) {
 		t.Fatal("Move did not abort")
 	}
 }
+
+func TestScreenshotByWindowTitle(t *testing.T) {
+	backend := &backendMock{}
+	service := NewService(backend)
+	if _, err := service.Screenshot(context.Background(), ScreenshotOptions{Target: TargetWindow, WindowTitle: "tes"}); err != nil {
+		t.Fatalf("Screenshot returned error: %v", err)
+	}
+	if backend.options.WindowID != "window-1" {
+		t.Fatalf("window id = %q, want window-1", backend.options.WindowID)
+	}
+	if _, err := service.Screenshot(context.Background(), ScreenshotOptions{Target: TargetWindow, WindowTitle: "missing"}); err == nil {
+		t.Fatal("Screenshot accepted an unmatched title")
+	}
+}

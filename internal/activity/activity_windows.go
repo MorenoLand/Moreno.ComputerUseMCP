@@ -14,64 +14,68 @@ import (
 )
 
 const (
-	wmClose           = 0x0010
-	wmDestroy         = 0x0002
-	wmPaint           = 0x000F
-	wmEraseBackground = 0x0014
-	wmNCHitTest       = 0x0084
-	wmMouseActivate   = 0x0021
-	wmActivityUpdate  = 0x8001
-	vkEscape          = 0x1B
-	maNoActivate      = 3
-	htTransparent     = ^uintptr(0)
-	wsPopup           = 0x80000000
-	wsExToolWindow    = 0x00000080
-	wsExTopmost       = 0x00000008
-	wsExTransparent   = 0x00000020
-	wsExNoActivate    = 0x08000000
-	swpNoActivate     = 0x00000010
-	swpNoMove         = 0x00000002
-	swpNoSize         = 0x00000001
-	swpShowWindow     = 0x00000040
-	swHide            = 0
-	swShowNoActivate  = 4
-	dtNoPrefix        = 0x00000800
-	transparent       = 1
-	defaultGUIFont    = 17
+	wmClose                    = 0x0010
+	wmDestroy                  = 0x0002
+	wmPaint                    = 0x000F
+	wmEraseBackground          = 0x0014
+	wmNCHitTest                = 0x0084
+	wmMouseActivate            = 0x0021
+	wmActivityUpdate           = 0x8001
+	vkEscape                   = 0x1B
+	activityStatusWidth        = 360
+	activityStatusHeight       = 56
+	activityStatusMargin       = 24
+	activityExcludeFromCapture = 0x11
+	maNoActivate               = 3
+	htTransparent              = ^uintptr(0)
+	wsPopup                    = 0x80000000
+	wsExToolWindow             = 0x00000080
+	wsExTopmost                = 0x00000008
+	wsExTransparent            = 0x00000020
+	wsExNoActivate             = 0x08000000
+	swpNoActivate              = 0x00000010
+	swpNoMove                  = 0x00000002
+	swpNoSize                  = 0x00000001
+	swHide                     = 0
+	swShowNoActivate           = 4
+	dtNoPrefix                 = 0x00000800
+	transparent                = 1
+	defaultGUIFont             = 17
 )
 
 var (
-	activityUser32               = windows.NewLazySystemDLL("user32.dll")
-	activityGDI32                = windows.NewLazySystemDLL("gdi32.dll")
-	procActivityGetModuleHandle  = activityKernel32.NewProc("GetModuleHandleW")
-	procActivityRegisterClassEx  = activityUser32.NewProc("RegisterClassExW")
-	procActivityCreateWindowEx   = activityUser32.NewProc("CreateWindowExW")
-	procActivityDefWindowProc    = activityUser32.NewProc("DefWindowProcW")
-	procActivityGetDC            = activityUser32.NewProc("GetDC")
-	procActivityReleaseDC        = activityUser32.NewProc("ReleaseDC")
-	procActivityDestroyWindow    = activityUser32.NewProc("DestroyWindow")
-	procActivityPostQuitMessage  = activityUser32.NewProc("PostQuitMessage")
-	procActivityPostMessage      = activityUser32.NewProc("PostMessageW")
-	procActivityGetMessage       = activityUser32.NewProc("GetMessageW")
-	procActivityTranslateMessage = activityUser32.NewProc("TranslateMessage")
-	procActivityDispatchMessage  = activityUser32.NewProc("DispatchMessageW")
-	procActivityShowWindow       = activityUser32.NewProc("ShowWindow")
-	procActivityUpdateWindow     = activityUser32.NewProc("UpdateWindow")
-	procActivitySetWindowPos     = activityUser32.NewProc("SetWindowPos")
-	procActivityInvalidateRect   = activityUser32.NewProc("InvalidateRect")
-	procActivityGetAsyncKeyState = activityUser32.NewProc("GetAsyncKeyState")
-	procActivityGetSystemMetrics = activityUser32.NewProc("GetSystemMetrics")
-	procActivityBeginPaint       = activityUser32.NewProc("BeginPaint")
-	procActivityEndPaint         = activityUser32.NewProc("EndPaint")
-	procActivityGetClientRect    = activityUser32.NewProc("GetClientRect")
-	procActivityDrawText         = activityUser32.NewProc("DrawTextW")
-	procActivitySetBkMode        = activityGDI32.NewProc("SetBkMode")
-	procActivitySetTextColor     = activityGDI32.NewProc("SetTextColor")
-	procActivityGetStockObject   = activityGDI32.NewProc("GetStockObject")
-	procActivitySelectObject     = activityGDI32.NewProc("SelectObject")
-	procActivityCreateSolidBrush = activityGDI32.NewProc("CreateSolidBrush")
-	procActivityFillRect         = activityUser32.NewProc("FillRect")
-	procActivityDeleteObject     = activityGDI32.NewProc("DeleteObject")
+	activityUser32                 = windows.NewLazySystemDLL("user32.dll")
+	activityGDI32                  = windows.NewLazySystemDLL("gdi32.dll")
+	procActivityGetModuleHandle    = activityKernel32.NewProc("GetModuleHandleW")
+	procActivityRegisterClassEx    = activityUser32.NewProc("RegisterClassExW")
+	procActivityCreateWindowEx     = activityUser32.NewProc("CreateWindowExW")
+	procActivityDefWindowProc      = activityUser32.NewProc("DefWindowProcW")
+	procActivityGetDC              = activityUser32.NewProc("GetDC")
+	procActivityReleaseDC          = activityUser32.NewProc("ReleaseDC")
+	procActivityDestroyWindow      = activityUser32.NewProc("DestroyWindow")
+	procActivityPostQuitMessage    = activityUser32.NewProc("PostQuitMessage")
+	procActivityPostMessage        = activityUser32.NewProc("PostMessageW")
+	procActivityGetMessage         = activityUser32.NewProc("GetMessageW")
+	procActivityTranslateMessage   = activityUser32.NewProc("TranslateMessage")
+	procActivityDispatchMessage    = activityUser32.NewProc("DispatchMessageW")
+	procActivityShowWindow         = activityUser32.NewProc("ShowWindow")
+	procActivityUpdateWindow       = activityUser32.NewProc("UpdateWindow")
+	procActivitySetWindowPos       = activityUser32.NewProc("SetWindowPos")
+	procActivityInvalidateRect     = activityUser32.NewProc("InvalidateRect")
+	procActivityGetAsyncKeyState   = activityUser32.NewProc("GetAsyncKeyState")
+	procActivityGetSystemMetrics   = activityUser32.NewProc("GetSystemMetrics")
+	procActivityBeginPaint         = activityUser32.NewProc("BeginPaint")
+	procActivityEndPaint           = activityUser32.NewProc("EndPaint")
+	procActivityGetClientRect      = activityUser32.NewProc("GetClientRect")
+	procActivitySetDisplayAffinity = activityUser32.NewProc("SetWindowDisplayAffinity")
+	procActivityDrawText           = activityUser32.NewProc("DrawTextW")
+	procActivitySetBkMode          = activityGDI32.NewProc("SetBkMode")
+	procActivitySetTextColor       = activityGDI32.NewProc("SetTextColor")
+	procActivityGetStockObject     = activityGDI32.NewProc("GetStockObject")
+	procActivitySelectObject       = activityGDI32.NewProc("SelectObject")
+	procActivityCreateSolidBrush   = activityGDI32.NewProc("CreateSolidBrush")
+	procActivityFillRect           = activityUser32.NewProc("FillRect")
+	procActivityDeleteObject       = activityGDI32.NewProc("DeleteObject")
 )
 
 var activityKernel32 = windows.NewLazySystemDLL("kernel32.dll")
@@ -228,20 +232,20 @@ func (c *controller) setup() error {
 	if value, _, err := procActivityRegisterClassEx.Call(uintptr(unsafe.Pointer(&class))); value == 0 && windows.GetLastError() != windows.ERROR_CLASS_ALREADY_EXISTS {
 		return win32ActivityError("RegisterClassEx", err)
 	}
-	width, height := 300, 48
+	width, height := activityStatusWidth, activityStatusHeight
 	xVirtual := activitySystemMetric(76)
 	yVirtual := activitySystemMetric(77)
 	widthVirtual := activitySystemMetric(78)
 	heightVirtual := activitySystemMetric(79)
-	x := xVirtual + widthVirtual - width - 16
-	y := yVirtual + 16
+	x := xVirtual + (widthVirtual-width)/2
+	y := yVirtual + heightVirtual - height - activityStatusMargin
 	hwnd, _, err := procActivityCreateWindowEx.Call(wsExToolWindow|wsExTopmost|wsExTransparent|wsExNoActivate, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(name)), wsPopup, uintptr(int32(x)), uintptr(int32(y)), uintptr(width), uintptr(height), 0, 0, instance, 0)
 	if hwnd == 0 {
 		return win32ActivityError("CreateWindowEx", err)
 	}
 	c.hwnd = hwnd
-	procActivitySetWindowPos.Call(hwnd, ^uintptr(0), uintptr(int32(x)), uintptr(int32(y)), uintptr(width), uintptr(height), swpNoActivate|swpShowWindow)
-	procActivityShowWindow.Call(hwnd, swShowNoActivate)
+	protectActivityWindow(hwnd)
+	procActivitySetWindowPos.Call(hwnd, ^uintptr(0), uintptr(int32(x)), uintptr(int32(y)), uintptr(width), uintptr(height), swpNoActivate)
 	borderThickness := 2
 	borderWindows := [][4]int{
 		{xVirtual, yVirtual, widthVirtual, borderThickness},
@@ -256,6 +260,7 @@ func (c *controller) setup() error {
 			return win32ActivityError("CreateWindowEx border", borderErr)
 		}
 		c.border[index] = borderHwnd
+		protectActivityWindow(borderHwnd)
 	}
 	procActivityInvalidateRect.Call(hwnd, 0, 1)
 	procActivityUpdateWindow.Call(hwnd)
@@ -317,10 +322,18 @@ func (c *controller) invalidate() {
 }
 
 func (c *controller) update(hwnd uintptr) {
-	c.paintNow(hwnd)
 	c.mu.RLock()
 	active := c.active
 	c.mu.RUnlock()
+	if active {
+		procActivitySetWindowPos.Call(hwnd, ^uintptr(0), 0, 0, 0, 0, swpNoActivate|swpNoMove|swpNoSize)
+		procActivityShowWindow.Call(hwnd, swShowNoActivate)
+		procActivityInvalidateRect.Call(hwnd, 0, 0)
+		procActivityUpdateWindow.Call(hwnd)
+		c.paintNow(hwnd)
+	} else {
+		procActivityShowWindow.Call(hwnd, swHide)
+	}
 	for _, border := range c.border {
 		if border == 0 {
 			continue
@@ -335,7 +348,9 @@ func (c *controller) update(hwnd uintptr) {
 			procActivityShowWindow.Call(border, swHide)
 		}
 	}
-	procActivitySetWindowPos.Call(c.hwnd, ^uintptr(0), 0, 0, 0, 0, swpNoActivate|swpNoMove|swpNoSize)
+	if active {
+		procActivitySetWindowPos.Call(c.hwnd, ^uintptr(0), 0, 0, 0, 0, swpNoActivate|swpNoMove|swpNoSize)
+	}
 }
 
 func (c *controller) isBorder(hwnd uintptr) bool {
@@ -384,16 +399,16 @@ func (c *controller) draw(hwnd, dc uintptr) {
 	if active {
 		stripe = 0x0000A5FF
 	}
-	fillActivityRect(dc, nativeActivityRect{Right: 300, Bottom: 48}, background)
-	fillActivityRect(dc, nativeActivityRect{Right: 300, Bottom: 3}, stripe)
+	fillActivityRect(dc, nativeActivityRect{Right: activityStatusWidth, Bottom: activityStatusHeight}, background)
+	fillActivityRect(dc, nativeActivityRect{Right: activityStatusWidth, Bottom: 3}, stripe)
 	font, _, _ := procActivityGetStockObject.Call(defaultGUIFont)
 	previousFont, _, _ := procActivitySelectObject.Call(dc, font)
 	defer procActivitySelectObject.Call(dc, previousFont)
 	procActivitySetBkMode.Call(dc, transparent)
 	procActivitySetTextColor.Call(dc, 0x00FFFFFF)
-	drawActivityText(dc, "Computer controlled by "+client, nativeActivityRect{Left: 10, Top: 7, Right: 290, Bottom: 27})
+	drawActivityText(dc, "Computer controlled by "+client, nativeActivityRect{Left: 10, Top: 8, Right: activityStatusWidth - 10, Bottom: 30})
 	procActivitySetTextColor.Call(dc, 0x00D0D0D0)
-	drawActivityText(dc, "Esc to stop", nativeActivityRect{Left: 10, Top: 27, Right: 290, Bottom: 45})
+	drawActivityText(dc, "Esc to stop", nativeActivityRect{Left: 10, Top: 31, Right: activityStatusWidth - 10, Bottom: 52})
 }
 
 func fillActivityRect(dc uintptr, rect nativeActivityRect, color uint32) {
@@ -408,6 +423,10 @@ func fillActivityRect(dc uintptr, rect nativeActivityRect, color uint32) {
 func drawActivityText(dc uintptr, value string, rect nativeActivityRect) {
 	text := windows.StringToUTF16Ptr(value)
 	procActivityDrawText.Call(dc, uintptr(unsafe.Pointer(text)), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&rect)), dtNoPrefix)
+}
+
+func protectActivityWindow(hwnd uintptr) {
+	procActivitySetDisplayAffinity.Call(hwnd, activityExcludeFromCapture)
 }
 
 func (c *controller) destroyWindows() {

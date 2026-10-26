@@ -23,11 +23,12 @@ const (
 	smCXVirtualScreen = 78
 	smCYVirtualScreen = 79
 
-	srccopy      = 0x00CC0020
-	captureblt   = 0x40000000
-	biRGB        = 0
-	dibRGBColors = 0
-	diNormal     = 0x0003
+	srccopy             = 0x00CC0020
+	captureblt          = 0x40000000
+	biRGB               = 0
+	dibRGBColors        = 0
+	diNormal            = 0x0003
+	pwRenderFullContent = 0x00000002
 
 	inputMouse    = 0
 	inputKeyboard = 1
@@ -54,6 +55,7 @@ var (
 	procGetSystemMetrics              = user32.NewProc("GetSystemMetrics")
 	procGetForegroundWindow           = user32.NewProc("GetForegroundWindow")
 	procGetWindowRect                 = user32.NewProc("GetWindowRect")
+	procPrintWindow                   = user32.NewProc("PrintWindow")
 	procIsWindow                      = user32.NewProc("IsWindow")
 	procIsWindowVisible               = user32.NewProc("IsWindowVisible")
 	procIsIconic                      = user32.NewProc("IsIconic")
@@ -152,11 +154,20 @@ func newBackend() computer.Backend {
 }
 
 func (b *windowsBackend) Screenshot(ctx context.Context, options computer.ScreenshotOptions) (computer.Screenshot, error) {
-	rect, windowID, err := b.targetRect(options)
+	rect, hwnd, windowID, err := b.targetRect(options)
 	if err != nil {
 		return computer.Screenshot{}, err
 	}
-	data, mimeType, width, height, err := capture(ctx, rect, options)
+	var data []byte
+	var mimeType string
+	var width, height int
+	if hwnd != 0 && isMinimized(hwnd) {
+		data, mimeType, width, height, rect, err = captureMinimizedWindow(ctx, hwnd, options)
+	} else if hwnd != 0 {
+		data, mimeType, width, height, err = captureWindow(ctx, hwnd, rect, options)
+	} else {
+		data, mimeType, width, height, err = capture(ctx, rect, options)
+	}
 	if err != nil {
 		return computer.Screenshot{}, err
 	}
@@ -184,25 +195,37 @@ func (b *windowsBackend) ListWindows(ctx context.Context) ([]computer.Window, er
 			return 1
 		}
 		title := windowTitle(hwnd)
-		if title == "" {
+		if title == "" || isCloaked(hwnd) {
 			return 1
 		}
+		minimized := isMinimized(hwnd)
 		rect, ok := windowRect(hwnd)
+		if minimized {
+			// A minimized window reports a parked icon rectangle; list the
+			// area it will have when captured or restored instead.
+			if placement, found := getWindowPlacement(hwnd); found {
+				width, height := restoredSize(placement)
+				rect = nativeRect{
+					Left:   placement.NormalPosition.Left,
+					Top:    placement.NormalPosition.Top,
+					Right:  placement.NormalPosition.Left + width,
+					Bottom: placement.NormalPosition.Top + height,
+				}
+				ok = true
+			}
+		}
 		if !ok || rect.Right <= rect.Left || rect.Bottom <= rect.Top {
 			return 1
 		}
 		result = append(result, computer.Window{
-			ID:      formatWindowID(hwnd),
-			Title:   title,
-			X:       int(rect.Left),
-			Y:       int(rect.Top),
-			Width:   int(rect.Right - rect.Left),
-			Height:  int(rect.Bottom - rect.Top),
-			Visible: true,
-			Minimized: func() bool {
-				minimized, _, _ := procIsIconic.Call(hwnd)
-				return minimized != 0
-			}(),
+			ID:        formatWindowID(hwnd),
+			Title:     title,
+			X:         int(rect.Left),
+			Y:         int(rect.Top),
+			Width:     int(rect.Right - rect.Left),
+			Height:    int(rect.Bottom - rect.Top),
+			Visible:   true,
+			Minimized: minimized,
 		})
 		return 1
 	})
@@ -305,7 +328,7 @@ func (b *windowsBackend) Close() error {
 	return nil
 }
 
-func (b *windowsBackend) targetRect(options computer.ScreenshotOptions) (captureRect, string, error) {
+func (b *windowsBackend) targetRect(options computer.ScreenshotOptions) (captureRect, uintptr, string, error) {
 	switch options.Target {
 	case computer.TargetScreen:
 		left := systemMetric(smXVirtualScreen)
@@ -313,31 +336,33 @@ func (b *windowsBackend) targetRect(options computer.ScreenshotOptions) (capture
 		width := systemMetric(smCXVirtualScreen)
 		height := systemMetric(smCYVirtualScreen)
 		if width <= 0 || height <= 0 {
-			return captureRect{}, "", errors.New("virtual desktop has no captureable area")
+			return captureRect{}, 0, "", errors.New("virtual desktop has no captureable area")
 		}
-		return captureRect{Left: left, Top: top, Right: left + width, Bottom: top + height}, "", nil
+		return captureRect{Left: left, Top: top, Right: left + width, Bottom: top + height}, 0, "", nil
 	case computer.TargetActiveWindow:
 		hwnd, _, _ := procGetForegroundWindow.Call()
 		if hwnd == 0 {
-			return captureRect{}, "", errors.New("no foreground window is available")
+			return captureRect{}, 0, "", errors.New("no foreground window is available")
 		}
 		rect, ok := windowRect(hwnd)
 		if !ok {
-			return captureRect{}, "", errors.New("foreground window has no captureable bounds")
+			return captureRect{}, 0, "", errors.New("foreground window has no captureable bounds")
 		}
-		return validCaptureRect(rect, formatWindowID(hwnd))
+		captureRect, windowID, err := validCaptureRect(rect, formatWindowID(hwnd))
+		return captureRect, hwnd, windowID, err
 	case computer.TargetWindow:
 		hwnd, err := parseWindowID(options.WindowID)
 		if err != nil {
-			return captureRect{}, "", err
+			return captureRect{}, 0, "", err
 		}
 		rect, ok := windowRect(hwnd)
 		if !ok {
-			return captureRect{}, "", errors.New("window has no captureable bounds")
+			return captureRect{}, 0, "", errors.New("window has no captureable bounds")
 		}
-		return validCaptureRect(rect, formatWindowID(hwnd))
+		captureRect, windowID, err := validCaptureRect(rect, formatWindowID(hwnd))
+		return captureRect, hwnd, windowID, err
 	default:
-		return captureRect{}, "", fmt.Errorf("unsupported screenshot target %q", options.Target)
+		return captureRect{}, 0, "", fmt.Errorf("unsupported screenshot target %q", options.Target)
 	}
 }
 
@@ -377,6 +402,78 @@ func capture(ctx context.Context, rect captureRect, options computer.ScreenshotO
 	if options.IncludeCursor {
 		drawCursor(memoryDC, rect)
 	}
+	data, mimeType, encodedWidth, encodedHeight, err := encodeBitmap(memoryDC, bitmap, width, height, options)
+	if err != nil {
+		return nil, "", 0, 0, err
+	}
+	return data, mimeType, encodedWidth, encodedHeight, nil
+}
+
+func captureWindow(ctx context.Context, hwnd uintptr, rect captureRect, options computer.ScreenshotOptions) ([]byte, string, int, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", 0, 0, err
+	}
+	data, mimeType, width, height, graphicsErr := captureWindowGraphics(ctx, hwnd, options)
+	if graphicsErr == nil {
+		return data, mimeType, width, height, nil
+	}
+	data, mimeType, width, height, printErr := captureWindowPrintWindow(ctx, hwnd, rect, options)
+	if printErr != nil {
+		return nil, "", 0, 0, fmt.Errorf("graphics capture failed: %v; PrintWindow failed: %w", graphicsErr, printErr)
+	}
+	return data, mimeType, width, height, nil
+}
+
+func captureWindowPrintWindow(ctx context.Context, hwnd uintptr, rect captureRect, options computer.ScreenshotOptions) ([]byte, string, int, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", 0, 0, err
+	}
+	width := rect.Right - rect.Left
+	height := rect.Bottom - rect.Top
+	if width <= 0 || height <= 0 {
+		return nil, "", 0, 0, errors.New("capture rectangle has no area")
+	}
+	desktopDC, _, desktopErr := procGetDC.Call(0)
+	if desktopDC == 0 {
+		return nil, "", 0, 0, win32Error("GetDC", desktopErr)
+	}
+	defer procReleaseDC.Call(0, desktopDC)
+	memoryDC, _, memoryErr := procCreateCompatibleDC.Call(desktopDC)
+	if memoryDC == 0 {
+		return nil, "", 0, 0, win32Error("CreateCompatibleDC", memoryErr)
+	}
+	defer procDeleteDC.Call(memoryDC)
+	bitmap, _, bitmapErr := procCreateCompatibleBitmap.Call(desktopDC, uintptr(width), uintptr(height))
+	if bitmap == 0 {
+		return nil, "", 0, 0, win32Error("CreateCompatibleBitmap", bitmapErr)
+	}
+	defer procDeleteObject.Call(bitmap)
+	previous, _, selectErr := procSelectObject.Call(memoryDC, bitmap)
+	if previous == 0 || previous == ^uintptr(0) {
+		return nil, "", 0, 0, win32Error("SelectObject", selectErr)
+	}
+	defer procSelectObject.Call(memoryDC, previous)
+	rendered, _, firstErr := procPrintWindow.Call(hwnd, memoryDC, pwRenderFullContent)
+	if rendered == 0 {
+		rendered, _, secondErr := procPrintWindow.Call(hwnd, memoryDC, 0)
+		if rendered == 0 {
+			if secondErr == nil {
+				secondErr = firstErr
+			}
+			return nil, "", 0, 0, win32Error("PrintWindow", secondErr)
+		}
+	}
+	if options.IncludeCursor {
+		drawCursor(memoryDC, rect)
+	}
+	data, mimeType, encodedWidth, encodedHeight, err := encodeBitmap(memoryDC, bitmap, width, height, options)
+	if err != nil {
+		return nil, "", 0, 0, err
+	}
+	return data, mimeType, encodedWidth, encodedHeight, nil
+}
+
+func encodeBitmap(dc, bitmap uintptr, width, height int, options computer.ScreenshotOptions) ([]byte, string, int, int, error) {
 	pixels := make([]byte, width*height*4)
 	info := bitmapInfo{Header: bitmapInfoHeader{
 		Size:        uint32(unsafe.Sizeof(bitmapInfoHeader{})),
@@ -386,19 +483,15 @@ func capture(ctx context.Context, rect captureRect, options computer.ScreenshotO
 		BitCount:    32,
 		Compression: biRGB,
 	}}
-	if value, _, err := procGetDIBits.Call(memoryDC, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])), uintptr(unsafe.Pointer(&info)), dibRGBColors); value == 0 {
+	if value, _, err := procGetDIBits.Call(dc, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])), uintptr(unsafe.Pointer(&info)), dibRGBColors); value == 0 {
 		return nil, "", 0, 0, win32Error("GetDIBits", err)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			source := (y*width + x) * 4
-			target := y*img.Stride + x*4
-			img.Pix[target] = pixels[source+2]
-			img.Pix[target+1] = pixels[source+1]
-			img.Pix[target+2] = pixels[source]
-			img.Pix[target+3] = 0xff
-		}
+	for i := 0; i+3 < len(pixels); i += 4 {
+		img.Pix[i] = pixels[i+2]
+		img.Pix[i+1] = pixels[i+1]
+		img.Pix[i+2] = pixels[i]
+		img.Pix[i+3] = 0xff
 	}
 	return computer.EncodeImage(img, options)
 }
